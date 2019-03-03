@@ -1,0 +1,728 @@
+<br> 
+<center><img src="http://i.imgur.com/sSaOozN.png" width="500"></center>
+
+## Course: Visual Analytics for Policy and Management
+
+### Prof. José Manuel Magallanes, PhD 
+
+_____
+<a id='part1'></a>
+
+# Session 2: Visualizing Tabular data
+
+### [Multivariate Case](https://github.com/EvansDataScience/VisualAnalytics_tabularDataMulti)
+
+_____
+
+
+We collect multiple variables for a particular purpose, knowing that social complexity can hardly be directly explained with bivariate or univariate approaches. 
+
+However, as it is difficult to visualize information with high dimensional data; most of our data will go through some dimensionality reduction that will have a particular purpose:
+
+1. [Descriptive](#part2)
+
+2. [Inferential](#part3) 
+
+
+_____
+
+
+<a id='part2'></a>
+
+## Descriptive plots
+
+The word descriptive is used because our intention is not to go beyond the units of analysis we have.
+
+This time, I will use the [data about city safety](https://jpn.nec.com/en/global/ad/insite/download/economist/en/data_workbook_dl.html):
+
+```{r, eval=FALSE}
+library(openxlsx)
+link="https://github.com/EvansDataScience/data/raw/master/safeCitiesIndexAll.xlsx"
+
+safe=read.xlsx(link)
+```
+
+
+The data available are:
+
+```{r, eval=FALSE}
+names(safe)
+```
+
+These are several variables telling us information about the safety levels of cities in the world, and are related to **D**_igital_, **H**_ealth_, **I**_nfrastructure_, and **P**_ersonal_ dimensions. For each of these dimensions, there are measures of actions taken (**In**), and results (**Out**). 
+
+It is not a good idea to see the first rows, as there are too many variables. But we can use some tricky notation:
+
+```{r, eval=FALSE}
+# all the questions with this: "H_In_"
+grep("H_In_", colnames(safe) ) # ^ means starts with
+```
+
+```{r, eval=FALSE}
+# the 'head' of only those:
+positionsIN=grep("H_In_", colnames(safe) )
+head(safe[,c(1,positionsIN)])
+
+```
+
+
+Making a plot of 49 variables would be a good idea?
+
+If you try making a correlation matrix, you will deal with a 49 by 49 matrix.  Let me see a plot with the previous subset:
+```{r, eval=FALSE}
+pairs(safe[,c(positionsIN)])
+```
+
+Trying to plot all the variables with this approach will not be the right choice. 
+
+We can still plot the correlations, but we need extra help:
+
+```{r, eval=FALSE}
+library(ggplot2)
+library(GGally) # may need to install
+
+ggcorr(safe[,-1], # all but the first column
+       hjust = 0.9,# distance to plot (diagonal)
+       size=1, # font size
+       layout.exp=4, # width so that variable names are shown
+       low = 'red',high = 'blue') # color scale
+```
+
+When using **ggcorr** you can work as in ggplot, adding layers:
+
+```{r, eval=FALSE}
+base= ggcorr(safe[,-1],size=1,layout.exp=4,hjust=0.9,
+             nbreaks = 3, # 3 intervals 
+             palette = "PuOr")
+
+base + guides(fill=guide_legend("some title")) # if you need a title for legend
+```
+
+However, this tells you information about the variables (columns), but not about the cases (rows). You may try the **heatmap** to see cases and variables.
+
+Heatmaps will show you the whole data set. First, we need some reshaping:
+```{r, eval=FALSE}
+library(reshape)
+safeA=melt(safe,
+           id.vars = 'city') # the unit of analysis
+head(safeA)
+```
+
+The _melting_ changed the direction of the data: the columns were sent into rows. This looks like panel data format or _long format_ (the original is the _wide format_). Now, the heatmap using this format:
+
+```{r, eval=FALSE}
+
+base = ggplot(data = safeA, aes(x = variable,
+                                y =city)) 
+
+heat1= base +  geom_tile(aes(fill = value)) 
+heat1
+```
+
+Here you can see what rows have higher or lower colors on what set of variables. You can add color pallette:
+
+```{r, eval=FALSE}
+#inverse color -1
+heat2 = heat1 + scale_fill_distiller(palette = "RdYlGn",direction = 1)  
+heat2
+```
+
+The column and row names need some work:
+
+```{r, eval=FALSE}
+heat2 + theme(axis.text.x = element_text(angle = 90, 
+                                         hjust = 1,
+                                         size = 4),
+              axis.text.y = element_text(size = 4))
+```
+
+
+The last heatmap above could be 'ordered' so that column and row positions can give us more information:
+
+```{r, eval=FALSE}
+# change in REORDER
+base= ggplot(data = safeA, aes(x = reorder(variable, 
+                                           value, median, order=TRUE),
+                               y =reorder(city,
+                                          value, median, order=TRUE)))
+# THIS IS THE SAME
+base + geom_tile(aes(fill = value)) + 
+    scale_fill_distiller(palette = "RdYlGn",direction = 1) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1,size = 4),
+              axis.text.y = element_text(size = 4))
+```
+
+This is still hard to read. An alternative could be to average each dimension, so you get four columns. These data has that information:
+
+```{r, eval=FALSE}
+library(openxlsx)
+link2="https://github.com/EvansDataScience/data/raw/master/safeCitiesIndex.xlsx"
+
+safe2=read.xlsx(link2)
+head(safe2)
+```
+
+Just reshaping for ggplot:
+```{r, eval=FALSE}
+safe2A=melt(safe2,id.vars = 'city')
+head(safe2A)
+```
+
+
+We are using a radar plot this time:
+
+```{r, fig.width=20, fig.height=15, eval=FALSE}
+base  = ggplot(safe2A, aes(x = variable, y = value, group = city))
+
+plot1 = base + geom_polygon(fill = 'gray',col='orange') + coord_polar()
+
+plot2 = plot1 + facet_wrap(~city,# one plot per city
+                           ncol = 10) # ten plot per row
+plot2
+```
+
+The radar plot describes how a cases is doing in every dimension (we have four dimensions). 
+
+We could improve the plot by ordering the facet and increasing the font size ofthe name of dimensions (X), and having less columns:
+
+```{r, fig.width=15, fig.height=25, eval=FALSE}
+
+plot2 = plot1 + facet_wrap(~reorder(city,value, median, order=TRUE),ncol = 7)
+
+
+plot3 = plot2 + theme(axis.text.x = element_text(size = 8)) 
+plot3 
+```
+
+We can also highlight the case's names, let's change the _theme_ from above:
+
+```{r, fig.width=15, fig.height=25, eval=FALSE}
+plot3 = plot2 + theme(axis.text.x = element_text(size = 8),
+                legend.position="none",
+                strip.text = element_text(size = 20)) #here!!!
+plot3
+```
+
+You could add extra customization if wanted:
+
+```{r, fig.width=15, fig.height=25, eval=FALSE}
+
+### arguments
+brdBkgnGrid=element_rect(fill = "white",colour = "red",
+             size = 3,linetype = "dashed")
+
+lineGrid=element_line(size = 3,linetype = 'solid',colour = "blue")
+
+### more customization
+plot3+ theme(panel.background = brdBkgnGrid,
+             panel.grid.major = lineGrid)
+                        
+```
+
+The colors above **are not** the best choice, I just used them for you to notice where to make changes.
+
+This same plot can be done using some additional packages related to ggplot. Let me show you the use of _ggiraph_, and _ggiraphExtra_. 
+
+Notice that these packages do not need the long format, but the wide one. Then, let me make a copy of the original _safe2_ data frame:
+
+```{r, eval=FALSE}
+# copy data
+safe2x=safe2
+head(safe2x)
+```
+
+To facilitate the plotting of countries by area size, our main task will be to convert the cities into an ordinal variable, the order will depend on a ranking of countries.
+
+```{r, eval=FALSE}
+# get minimun value by row
+safe2x$min=apply(safe2x[,c(2:5)],1,min)
+
+# turn this min values into a ranking
+safe2x$min=rank(safe2x$min,ties.method ='first' )
+
+# order city by ranking
+cityRk=as.factor(safe2x[order(safe2x$min),]$city)
+
+# turn city into ordered factor
+safe2x$city=factor(safe2x$city,
+                   levels= cityRk,
+                   labels = cityRk,
+                   ordered = T)
+
+# delete column with ranks
+safe2x$min=NULL
+```
+
+Notice the data seems the same:
+```{r, eval=FALSE}
+head(safe2x)
+```
+
+But the structure has varied:
+```{r, eval=FALSE}
+str(safe2x)
+```
+
+This is a simpler approach, when data is ready:
+
+```{r, fig.width=15, fig.height=10, eval=FALSE}
+library(ggiraph)
+library(ggiraphExtra)
+
+base = ggRadar(safe2x,aes(group='city'),legend.position="none") 
+
+plot1 = base + facet_wrap(~city,ncol = 10) 
+
+plot1 #+ geom_polygon(fill = 'white',col='orange')
+```
+
+For sure, if we had a small number of cases we could plot layers on top:
+
+```{r, eval=FALSE}
+some=c("Manila","Lima", "Washington DC","Tokyo")
+
+subSafe=safe2x[safe2x$city %in% some,]
+
+base = ggRadar(subSafe,aes(group='city'),
+               alpha = 0,legend.position="top") 
+
+base #+  theme(legend.title=element_blank())
+
+
+```
+
+Areas are difficult to compare, so the plots above might be used with care. 
+
+None of our previous plots represent **dimensionality reduction**, and that is what is coming now.
+
+
+A first approach would be to use a technique called **PCA** (principal components analysis). This technique is usefull if you want to get a composite score and a ranking: 
+
+1. Install/Activate the library. There are many libraries for PCA, let's use this one:
+
+```{r, eval=FALSE}
+library(psych)
+```
+
+2. Request one **factor** that summarize the _variables_, and the **score** for the _cases_.
+
+```{r, eval=FALSE}
+#copy
+safeCopy=safe
+resultPCA=principal(safeCopy[,-1],
+                nfactors = 1,
+                scores=T,
+                normalize=T)
+```
+
+3. Realize how much information you gained (or lost):
+```{r, eval=FALSE}
+resultPCA$Vaccounted[[2]]
+```
+
+4. Get the new index:
+
+```{r, eval=FALSE}
+safeCopy$indexSafe=as.vector(factor.scores(safeCopy[,-1],resultPCA)$scores)
+```
+
+The index looks like this:
+```{r, eval=FALSE}
+head(safeCopy[,c(49:51)]) # just the last three columns
+```
+
+5. Re scale the index:
+```{r, eval=FALSE}
+# pysch has its own 'rescale'
+safeCopy$indexSafe=scales::rescale(safeCopy$indexSafe, to = c(1, 100)) 
+
+# you get:
+head(safeCopy[,c(49:51)]) 
+```
+
+
+6. Create the ranking:
+```{r, eval=FALSE}
+safeCopy$RankSafe=rank(-safeCopy$indexSafe)
+head(safeCopy[,c(51:52)]) 
+```
+
+You have here a way to produce scores and a ranking, then you can propose any plot from the univariate alternatives for measurements or ordinal classification. However, you must pay attention to the variables:
+
+a. Realize you have a set of variables that tell you about measures taken (all the ... _IN_ ... ones) and outcomes (.. _OUT_ ..). Make two data frames:
+
+```{r, eval=FALSE}
+
+# IN/OUT
+positionsIN=grep("_In_", colnames(safe) )
+positionsOUT=grep("_Out_", colnames(safe) )
+
+#
+safeIN=safe[,c(1,positionsIN)]
+safeOUT=safe[,c(1,positionsOUT)]
+```
+
+b. Get the rankings and composite indexes:
+```{r, eval=FALSE}
+### IN
+resultIN=principal(safeIN[,-1],
+                   nfactors = 1,
+                   scores=T,
+                   normalize=T)
+
+safeIN$indexSafeIN=as.vector(factor.scores(safeIN[,-1],resultIN)$scores)
+safeIN$indexSafeIN=scales::rescale(safeIN$indexSafeIN, 
+                                   to = c(1, 100)) 
+safeIN$RankSafeIN=rank(-safeIN$indexSafeIN)
+
+### OUT
+resultOUT=principal(safeOUT[,-1],
+                    nfactors = 1,
+                    scores=T,
+                    normalize=T)
+
+safeOUT$indexSafeOUT=as.vector(factor.scores(safeOUT[,-1],resultOUT)$scores)
+safeOUT$indexSafeOUT=scales::rescale(safeOUT$indexSafeOUT, 
+                                     to = c(1, 100)) 
+safeOUT$RankSafeOUT=rank(-safeOUT$indexSafeOUT)
+```
+
+c. Merge the results
+```{r, eval=FALSE}
+safeIO=merge(safeIN,safeOUT)
+```
+
+In this case, we can see a scatter plot:
+
+```{r, eval=FALSE}
+ggplot(safeIO, aes(x= indexSafeIN, y= indexSafeOUT, label=city)) +
+  geom_point(colour="green") +geom_text(size=2) 
+```
+
+As before, we can try using text repelling:
+
+```{r, eval=FALSE}
+library(ggrepel)
+set.seed(123)
+
+base <- ggplot(safeIO, aes(x= indexSafeIN, y= indexSafeOUT,
+                           label=city))
+plot1 = base + geom_point(color = "red",na.rm=TRUE) #removing missing vals
+
+plot2 = plot1 + geom_text_repel(na.rm=TRUE) 
+
+plot2
+```
+
+If we limit the axis, we can se the low-low quadrant at 50% cut point:
+
+```{r, eval=FALSE}
+plot2 +  xlim(0, 50)+ylim(0,50)
+```
+
+Notice we have reduced two macrodimensions, and the relatioship was then represented in a scatter plot.
+
+There is an alternative way of reducing this dimensionalty, known as multidimensional scaling. In this technique, you can compute the multivariate distance among every row, and with that information create a map where closeness is intepreted as similarity.
+
+```{r, eval=FALSE}
+distanceAmong <- dist(safe[,-1]) # euclidean distances between the rows
+result <- cmdscale(distanceAmong,eig=TRUE, k=2) # k is the number of dim
+
+# data frame prep:
+dim1 <- result$points[,1]
+dim2 <- result$points[,2]
+
+coordinates=data.frame(dim1,dim2,city=safe$city)
+
+base= ggplot(coordinates,aes(x=dim1, y=dim2,label=city)) 
+base + geom_text(size=2)
+```
+
+Notice that the coordinates do not inform the same as in the scatter plot (it is not the case that Caracas is among the best), what matters is to know that the closer a city is to another, the more similar it is.
+
+Another key way to reduce dimensionality is **cluster analysis**. In this case we will group the cities using all the information available per city:
+
+```{r, eval=FALSE}
+library(cluster)
+set.seed(123)
+
+# computing clusters
+result <- kmeans(safeIO[,-c(1,25,26,53,54)], # not using composites just created
+                 centers = 3) # how many clusters
+# adding the cluster
+safeIO$cluster=as.factor(result$cluster)
+```
+
+Now we have a new variable, cluster:
+
+```{r, eval=FALSE}
+base <- ggplot(safeIO, aes(x= indexSafeIN, y= indexSafeOUT,
+                           label=city,
+                           color = cluster)) # cluster!!
+plot1 = base + geom_point(na.rm=TRUE) 
+
+plot1 + geom_text_repel(na.rm=TRUE,size=2) 
+
+```
+
+I redid the last scatter plot, but this time I colored the dots by the cluster.
+
+We could combine that information into the MDS plot:
+
+```{r, eval=FALSE}
+coordinates$cluster=safeIO$cluster
+
+base= ggplot(coordinates,aes(x=dim1, y=dim2,label=city,color=cluster)) 
+base + geom_text(size=2)
+```
+
+There is a very important algorithm that can be used when you have mappings like the ones you get from MDS, it is known as **dbscan**. This algorithm requires two arguments, the minimal distance between cases to be considered a neighbor, and the minimal amount of cases to be considered a cluster.
+
+The minimal amount of cases can be considered in this case is the amount of dimensions plus one, then we choose three. And the minimal distance is usually obtained from this plot, where thirty seems the moment when the 'elbow' starts:
+
+```{r, eval=FALSE}
+library(dbscan)
+kNNdistplot(coordinates[,c(1,2)], k = 3) # notice we use the coordinates
+abline(h=30, col = "red", lty=2)
+```
+
+```{r, eval=FALSE}
+library("fpc")
+# Compute DBSCAN using fpc package
+
+db_res <- fpc::dbscan(coordinates[,c(1,2)], eps = 30, MinPts = 3)
+# notice we use the coordinates above
+
+# Plot DBSCAN results
+#devtools::install_github("kassambara/factoextra")
+library("factoextra")
+fviz_cluster(db_res, coordinates[,c(1,2)], stand = FALSE, 
+             geom = 'text',
+             labelsize = 7,
+             outlier.labelsize=4,
+             repel = T,legend='none')
+
+```
+
+
+
+<a id='part3'></a>
+
+## Inferential plots
+
+In this situation, you are working with samples, and you use that information to inform about the population. Our main interest will be in **regression analysis**.
+
+Making a regression is very simple in R:
+
+```{r, eval=FALSE}
+model1=lm(PERSONAL~HEALTH+INFRASTRUCTURE,data=safe2[,-1])
+```
+
+The resulta can be seen using:
+```{r, eval=FALSE}
+summary(model1)
+```
+
+A helpful plot will help us show the effecto of those coefficients (HEALTH and INFRASTRUCTURE), that is, the effects of every X on Y.
+
+For that, I need the help of these packages:
+
+```{r, eval=FALSE}
+library(dotwhisker)
+library(broom)
+library(dplyr)
+```
+
+There is some preprocessing needed to use ggplot. 
+
+```{r, eval=FALSE}
+model1_t = tidy(model1) %>%   # we save the result as a tidy object and...
+    mutate(model = "Model 1") # we add a column 'model' with values 'Model 1'
+
+model1_t
+```
+
+Now we can plot:
+```{r, eval=FALSE}
+dwplot(model1_t)
+```
+
+Now, let me create another regression, but this time I will use all the variables:
+
+```{r, eval=FALSE}
+model2=lm(PERSONAL~.,data=safe2[,-1]) # ~. means: all the remaining variables
+summary(model2)
+```
+
+We did not include DIGITAL the first time, now we do. So, we can save the new model in the sama structure as before:
+
+```{r, eval=FALSE}
+model2_t <- tidy(model2) %>% mutate(model = "Model 2")
+```
+
+Having these two models, we can have a plot for both:
+```{r, eval=FALSE}
+# combining
+allModels=rbind(model1_t, model2_t)
+
+#plotting
+dwplot(allModels) 
+```
+
+A _dwplot_ produces a ggplot layer, so we can add elements:
+
+```{r, eval=FALSE}
+dwplot(allModels) + 
+    geom_vline(xintercept = 0, 
+               colour = "grey60", 
+               linetype = 2) +
+    scale_colour_grey(start = .1, end = .7)#+theme_bw()
+```
+
+The reference line at **zero** is very important, because you can see clearly which confidence interval includes **0**.
+
+
+Another important regression model is the **logistic regression**. In this case, the dependent variable is a binary value.
+
+For this example, I will turn our previous dependent variable into a dichotomous one:
+```{r, eval=FALSE}
+cut=median(safe2$PERSONAL)
+safe2$PERSONAL_bi=ifelse(safe2$PERSONAL>cut,
+                         1,0)
+```
+
+
+Now, let me compute the regression:
+
+```{r, eval=FALSE}
+logit_PERSONAL = glm(PERSONAL_bi~ .,
+                          data = safe2[,-c(1,5)],
+                          family = "binomial")
+summary(logit_PERSONAL)
+```
+
+This result is difficult to inform, as the coefficients values do not have an easy interpretation.
+
+An easy way to interpret those values, as the effect on the probability of ocurrence of the event **1** (tha the city is safe), is by computing the marginal values:
+
+
+```{r, eval=FALSE}
+library(margins)
+margins_logit_PERSONAL = margins(logit_PERSONAL) 
+
+marginalSummary=summary(margins_logit_PERSONAL)
+
+# just to see the results better:
+
+as.data.frame(marginalSummary)
+
+```
+
+We can have a basic R plot
+```{r, eval=FALSE}
+plot(margins_logit_PERSONAL)
+```
+
+For ggplot, you need to use the margins summary:
+
+```{r, eval=FALSE}
+base = ggplot(data = marginalSummary)
+
+eff1=base +  geom_point(aes(factor, AME))
+eff1
+
+```
+
+You can add elements:
+
+```{r, eval=FALSE}
+eff2= eff1 + geom_errorbar(aes(x = factor, 
+                               ymin = lower, 
+                               ymax = upper))
+eff2
+
+```
+
+Customize the color:
+
+```{r, eval=FALSE}
+eff2= eff1 + geom_errorbar(aes(x = factor, ymin = lower, ymax = upper),
+                           colour=c('blue','violet','violet'))
+eff2
+  
+```
+
+And annotate:
+
+```{r, eval=FALSE}
+
+##
+MESSAGE1="increasing on average 1.7% \n the probability of \n being a safe city"
+##
+
+eff3 = eff2 + geom_hline(yintercept = 0) +  theme_minimal() 
+
+eff3 + annotate("text", x = 1.5, 
+                y = 0.02, 
+                label = MESSAGE1) 
+
+```
+
+Instead of plotting the average, you can give more detail on what values:
+
+```{r, eval=FALSE}
+cplot(logit_PERSONAL,x="INFRASTRUCTURE") 
+```
+
+The information that produced the plot above can be saved:
+
+```{r, eval=FALSE}
+digi=cplot(logit_PERSONAL, "DIGITAL",draw = F)
+head(digi)
+```
+
+We can use that information for ggplot. Let me plot the curve:
+
+```{r, eval=FALSE}
+
+base = ggplot(digi, aes(x = xvals)) 
+p1=base +  geom_line(aes(y = yvals)) 
+p1
+
+```
+
+Let me add the limits:
+
+```{r, eval=FALSE}
+p2 = p1+  geom_line(aes(y = upper), linetype = 2) +
+          geom_line(aes(y = lower), linetype = 2) 
+p2
+
+```
+
+Or use ribbons instead:
+
+```{r, eval=FALSE}
+p1= base + geom_ribbon(aes(ymin = lower, ymax = upper), 
+                       fill = "grey90")
+p2 = p1 + geom_line(aes(y = yvals)) 
+p2
+```
+
+Some more detail:
+
+```{r, eval=FALSE}
+p3= p2 + labs(title="Effect of DIGITAL index on PERSONAL index",
+              x= "DIGITAL", y="Predicted Value")
+p3 + theme_bw()
+```
+
+<span style="color:red"> Exercise:<br> Improve and or complete one descriptive and one inferential plot from this session.
+</span>
+
+_____
+
+
+[Go to table of contents.](#part1)
+
+[Back to course schedule menu](https://evansdatascience.github.io/VisualAnalytics/)
